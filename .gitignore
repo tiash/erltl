@@ -1,0 +1,5 @@
+.DS_Store
+.*.swp
+ebin/*
+deps/*
+priv/www/mathjax

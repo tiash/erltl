@@ -152,7 +152,6 @@ normalise_fragments_([A,{expr,[]}|B])
 normalise_fragments_([A|B])
  when (element(1,hd(B))==param)
    or (element(1,hd(B))==init)
-   or (element(1,hd(B))==dispatch)
    or (element(1,hd(B))==render)
    -> case is_ws(A) of
         true -> normalise_fragments_(B);
@@ -177,53 +176,26 @@ to_forms(_CONFIG,?ERR(ERR)) -> ERR;
 to_forms(CONFIG,FRAGS1) ->
   % io:format("Headers...~n",[]),
   {TOPFORMS,FRAGS2} = lists:splitwith(fun ({form,_})->true; (_)->false end,FRAGS1),
-  {TOPPARS1_,FRAGS3} = lists:splitwith(fun ({param,_})->true; (_)->false end,FRAGS2),
-  {TOPINIT1_,FRAGS4} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS3),
-  {TOPPARS2_,FRAGS5} = lists:splitwith(fun ({param,_})->true; (_)->false end,FRAGS4),
-  {TOPINIT2_,FRAGS4} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS3),
-  {TOPEXPRS,FRAGS6} = lists:splitwith(fun ({expr,_})->true; (E)->is_binary(E) end,FRAGS5),
+  {TOPPARS1,FRAGS3} = lists:splitwith(fun ({param,_})->true; (_)->false end,FRAGS2),
+  {TOPINIT1,FRAGS4} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS3),
+  {TOPEXPRS,FRAGS5} = lists:splitwith(fun ({expr,_})->true; (E)->is_binary(E) end,FRAGS4),
   TOP = 
-    case (case {TOPPARS1_,TOPINIT1_,TOPPARS2_,TOPINIT2_,TOPEXPRS} of
-            {[],[],[],[],[]} -> nothing;
-            {_,_,[],[],_} -> {[],[],TOPPARS1_,TOPINIT1_};
-            {_,_,_,_,_} ->  {TOPPARS1_,TOPINIT1_,TOPPARS2_,TOPINIT2_}
-          end) of
-      {TOPPARS1,TOPINIT1,TOPPARS2,TOPINIT2} ->
-        [ {dispatch,?CONF(dispatch),unknown,[],TOPPARS1,TOPINIT1,?CONF(render),unknown}
-        , {render,?CONF(render),unknown,[],TOPPARS2,TOPINIT2,TOPEXPRS}
-        ];
-      _ -> []
+    case {TOPPARS1,TOPINIT1,TOPEXPRS} of
+      {[],[],[]} -> [];
+      _ -> 
+        [ {render,?CONF(render),unknown,[],TOPPARS1,TOPINIT1,TOPEXPRS} ]
     end,
   % io:format("Grouping...~n",[]),
-  FORMS0 = flatten([TOPFORMS,TOP,group_funs(FRAGS6)]),
+  FORMS0 = flatten([TOPFORMS,TOP,group_funs(FRAGS5)]),
   % io:format("render args...~n",[]),
   FORMS1 = guess_render_args(CONFIG,FORMS0),
-  % io:format("dispatch render fun...~n",[]),
-  FORMS2 = guess_dispatch_render_fun(CONFIG,FORMS1),
-  % io:format("dispatch render args...~n",[]),
-  FORMS3 = guess_dispatch_render_args(CONFIG,FORMS2),
-  % io:format("dispatch args...~n",[]),
-  FORMS4 = guess_dispatch_args(CONFIG,FORMS3),
   % io:format("pack forms...~n",[]),
-  pack_forms(CONFIG,FORMS4).
+  pack_forms(CONFIG,FORMS1).
   
 group_funs(?OK(CODE)) -> group_funs(CODE);
 group_funs(?ERR(ERR)) -> ERR;
 group_funs(FRAGS) -> group_funs(FRAGS,[]).
 group_funs([FORM={form,_}|FRAGS],ACCUM) -> group_funs(FRAGS,[FORM|ACCUM]);
-group_funs([{dispatch,NAME}|FRAGS1],ACCUM) ->
-  {PARS,FRAGS2} = lists:splitwith(fun ({param,_})->true; (_)->false end,FRAGS1),
-  {INIT,FRAGS3} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS2),
-  group_funs(FRAGS3,[{dispatch,NAME,unknown,[],PARS,INIT,unknown,unknown}|ACCUM]);
-group_funs([{dispatch,NAME,ARGS,GUARDS}|FRAGS1],ACCUM) ->
-  {INIT,FRAGS2} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS1),
-  group_funs(FRAGS2,[{dispatch,NAME,ARGS,GUARDS,[],INIT,unknown,unknown}|ACCUM]);
-group_funs([{dispatch,NAME,ARGS,GUARDS,RENDER}|FRAGS1],ACCUM) ->
-  {INIT,FRAGS2} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS1),
-  group_funs(FRAGS2,[{dispatch,NAME,ARGS,GUARDS,[],INIT,RENDER,unknown}|ACCUM]);
-group_funs([{dispatch,NAME,ARGS,GUARDS,RENDER,RARGS}|FRAGS1],ACCUM) ->
-  {INIT,FRAGS2} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS1),
-  group_funs(FRAGS2,[{dispatch,NAME,ARGS,GUARDS,[],INIT,RENDER,RARGS}|ACCUM]);
 group_funs([{render,NAME}|FRAGS1],ACCUM) ->
   {PARS,FRAGS2} = lists:splitwith(fun ({param,_})->true; (_)->false end,FRAGS1),
   {INIT,FRAGS3} = lists:splitwith(fun ({init,_})->true; ({param,_,_})->true; (_)->false end,FRAGS2),
@@ -245,46 +217,6 @@ guess_render_args(CONFIG,[{render,NAME,unknown,GUARDS,PARS,INIT,EXPR}|FRAGS],ACC
 guess_render_args(CONFIG,[F|FRAGS],ACCUM) -> guess_render_args(CONFIG,FRAGS,[F|ACCUM]);
 guess_render_args(_CONFIG,[],ACCUM) -> lists:reverse(ACCUM).
 
-guess_dispatch_render_fun(CONFIG,?OK(CODE)) -> guess_dispatch_render_fun(CONFIG,CODE);
-guess_dispatch_render_fun(_CONFIG,?ERR(ERR)) -> ERR;
-guess_dispatch_render_fun(CONFIG,FRAGS) -> guess_dispatch_render_fun(CONFIG,FRAGS,[]).
-guess_dispatch_render_fun(CONFIG,[{dispatch,NAME,ARGS,GUARDS,PARS,INIT,unknown,FARGS}|FRAGS],ACCUM) ->
-  % io:format("guess_dispatch_render_fun({dispatch,~p,~p,~p,~p,~p,unknown,~p}...)~n",[NAME,ARGS,GUARDS,PARS,INIT,FARGS]),
-  case [R || {render,R,_,_,_,_,_} <- FRAGS] of
-    [FUN|_] -> ok;
-    _ -> FUN=?CONF(render)
-  end,
-  guess_dispatch_render_fun(CONFIG,FRAGS,[{dispatch,NAME,ARGS,GUARDS,PARS,INIT,FUN,FARGS}|ACCUM]);
-guess_dispatch_render_fun(CONFIG,[F|FRAGS],ACCUM) -> guess_dispatch_render_fun(CONFIG,FRAGS,[F|ACCUM]);
-guess_dispatch_render_fun(_CONFIG,[],ACCUM) -> lists:reverse(ACCUM).
-
-guess_dispatch_render_args(CONFIG,?OK(CODE)) -> guess_dispatch_render_args(CONFIG,CODE);
-guess_dispatch_render_args(_CONFIG,?ERR(ERR)) -> ERR;
-guess_dispatch_render_args(CONFIG,FRAGS) -> guess_dispatch_render_args(CONFIG,FRAGS,FRAGS,[]).
-guess_dispatch_render_args(CONFIG,GFRAGS,[{dispatch,NAME,ARGS,GUARDS,PARS,INIT,FUN,unknown}|FRAGS],ACCUM) ->
-  % io:format("guess_dispatch_render_args({dispatch,~p,~p,~p,~p,~p,~p,unknown}...)~n",[NAME,ARGS,GUARDS,PARS,INIT,FUN]),
-  case [A || {render,R,A,_,_,_,_} <- FRAGS, R==FUN] of
-    [FARGS|_] -> FARGS;
-    _ ->
-      case [A || {render,R,A,_,_,_,_} <- GFRAGS, R==FUN] of
-        [FARGS|_] -> FARGS;
-        _ -> FARGS=?CONF(args)
-      end
-  end,
-  guess_dispatch_render_args(CONFIG,GFRAGS,FRAGS,[{dispatch,NAME,ARGS,GUARDS,PARS,INIT,FUN,asVars(FARGS)}|ACCUM]);
-guess_dispatch_render_args(CONFIG,GFRAGS,[F|FRAGS],ACCUM) -> guess_dispatch_render_args(CONFIG,GFRAGS,FRAGS,[F|ACCUM]);
-guess_dispatch_render_args(_CONFIG,_GFRAGS,[],ACCUM) -> lists:reverse(ACCUM).
-
-guess_dispatch_args(CONFIG,?OK(CODE)) -> guess_dispatch_args(CONFIG,CODE);
-guess_dispatch_args(_CONFIG,?ERR(ERR)) -> ERR;
-guess_dispatch_args(CONFIG,FRAGS) -> guess_dispatch_args(CONFIG,FRAGS,[]).
-guess_dispatch_args(CONFIG,[{dispatch,NAME,unknown,GUARDS,PARS,INIT,FUN,FARGS}|FRAGS],ACCUM) ->
-  % io:format("guess_dispatch_args({dispatch,~p,unknown,~p,~p,~p,~p,~p}...)~n",[NAME,GUARDS,PARS,INIT,FUN,FARGS]),
-  ARGS = ([A || {var,_,A} <- FARGS] -- [P || {param,P,_} <- INIT]) ++ [P || {param,P} <- PARS],
-  guess_dispatch_args(CONFIG,FRAGS,[{dispatch,NAME,asVars(ARGS),GUARDS,PARS,INIT,FUN,FARGS}|ACCUM]);
-guess_dispatch_args(CONFIG,[F|FRAGS],ACCUM) -> guess_dispatch_args(CONFIG,FRAGS,[F|ACCUM]);
-guess_dispatch_args(_CONFIG,[],ACCUM) -> lists:reverse(ACCUM).
-
 -define(TRACE(TAG,REF),[{trace,{TAG,REF}}]).
 -define(TRACE(TAG),?TRACE(TAG,make_ref())).
 
@@ -294,15 +226,6 @@ pack_forms(_CONFIG,?ERR(ERR),_ACCUM) -> ERR;
 pack_forms(CONFIG,[{form,FORM}|FRAGS],ACCUM) ->
   % io:format("pack_forms(...{form,~p}...).~n",unparse(FORM)),
   pack_forms(CONFIG,FRAGS,ACCUM ++ [FORM]);
-pack_forms(CONFIG,[{dispatch,NAME,ARGS,GUARDS,_,INIT,FUN,FARGS}|FRAGS],ACCUM) ->
-  % io:format("pack_forms(...{dispatch,~p,~p,~p,_,~p,~p,~p}...).~n",[NAME,ARGS,GUARDS,INIT,FUN,FARGS]),
-  CODE = [case C of
-            {init,C} -> C;
-            {param,K,V} -> match(var(K),V)
-          end || C <- INIT] 
-      ++ [ match(var(K),V) || {K,V} <- ?CONF(dispatch_binds), lists:all(fun ({param,A,_}) -> A/=K; (_) -> true end,INIT) ]
-      ++ [ match(var(?CONF(dispatch_body)),call(FUN,FARGS)) , ?CONF(dispatch_return) ],
-  pack_forms(CONFIG,FRAGS,ACCUM ++ [function(NAME,[clause(ARGS,GUARDS,CODE)])]);
 pack_forms(CONFIG,[{render,NAME,ARGS,GUARDS,_,INIT,EXPR}|FRAGS],ACCUM) ->
   % io:format("pack_forms(...{render,~p,~p,~p,_,~p,~p}...).~n",[NAME,ARGS,GUARDS,INIT,EXPR]),
   EXPRTOKENS = flatten(
@@ -376,18 +299,6 @@ parse_frag(CODE) ->
     OK -> OK
   end.
 parse_frag_(<<"!",_/binary>>) -> ?OK([]); % comment
-parse_frag_(<<"@@",CODE/binary>>) -> % starts a new function clause for a display function
-  case parse_function_sig(CODE) of
-    ?OK({NAME,ARGS,GUARDS}) -> ?OK([{dispatch,NAME,ARGS,GUARDS}]);
-    ?OK({NAME,ARGS,GUARDS,RES}) ->
-      ?OK([case RES of
-            [{atom,_,FUN}] -> {dispatch,NAME,ARGS,GUARDS,FUN};
-            [{call,_,{atom,_,FUN},RARGS}] -> {dispatch,NAME,ARGS,GUARDS,FUN,RARGS};
-            [{call,_,{remote,_,{atom,_,MOD},{atom,_,FUN}},RARGS}] -> {dispatch,NAME,ARGS,GUARDS,{MOD,FUN},RARGS}
-          end]);
-    ?OK(NAME) when is_atom(NAME) -> ?OK([{dispatch,NAME}]);
-    ?ERR(ERR) -> ERR
-  end;
 parse_frag_(<<"@",CODE/binary>>) -> % starts a new function clause for a render function
   case parse_function_sig(CODE) of
     ?OK({NAME,ARGS,GUARDS}) -> ?OK([{render,NAME,ARGS,GUARDS}]);
@@ -470,18 +381,9 @@ parse_function_sig(CODE) ->
 config([{K,V}|_],K) -> V;
 config([_|T],K) -> config(T,K);
 config([],args) ->
-  ['SOCKET','METHOD','PATH','PARAMS','HEADERS','ENTITYBODY'];
+  ['Data'];
 config([],render) ->
   'render';
-config([],dispatch) ->
-  'dispatch';
-config([],dispatch_binds) ->
-  [ {'status',integer(200)}
-  , {'headers',list([tuple({atom(content_type),binary("text/html")})])}
-  ];
-config([],dispatch_body) -> 'body';
-config([],dispatch_return) ->
-  tuple({var('status'),var('headers'),var('body')});
 config([],_) -> undefined.
 
 

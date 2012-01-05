@@ -7,6 +7,5 @@
                   kernel,
                   stdlib
                  ]},
-  {mod, { erltl_app, []}},
   {env, []}
  ]}.

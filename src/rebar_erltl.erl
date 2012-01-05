@@ -129,6 +129,9 @@ do_compile(Source, Target, Config) ->
     Opts = [{outdir, OutDir}, report,return],
     case erltl:compile(Source,Module, Opts++ErlTLOpts++ErlcOpts) of
         ok -> ok;
+        {ok,_,Bin,_} ->
+           filelib:ensure_dir(Target),
+           file:write_file(Target,Bin);
         Reason ->
             ?CONSOLE("Compiling template ~s failed:~n  ~p~n",
                      [Source, Reason]),
@@ -137,8 +140,9 @@ do_compile(Source, Target, Config) ->
   end).
 
 needs_compile(Source, Target, _Config) ->
-    LM = filelib:last_modified(Target),
-    LM < filelib:last_modified(Source).
+    LM = filelib:last_modified(Source),
+    LC = filelib:last_modified(Target),
+    LM>LC.
 
 
 

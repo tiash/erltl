@@ -37,7 +37,9 @@
 -export([bind/3]).
 -export(['try'/2,tryof/3,tryafter/3,tryofafter/4]).
 
--import(utils,[flatten/1,is_string/1,split_on/2]).
+-export([flatten/1]).
+-export([is_string/1]).
+-export([split_on/2]).
 
 -define(OK(VAL),{ok,VAL}).
 -define(ERRINFO(LOC,MOD,INFO),{error,{LOC,MOD,INFO}}).
@@ -497,4 +499,23 @@ intercalate(_,[]) -> [];
 intercalate(_,[ITEM]) -> [ITEM];
 intercalate(SEP,[HEAD|TAIL]) -> [HEAD,SEP|intercalate(SEP,TAIL)];
 ?FAILCLAUSE2(intercalate).
+
+
+flatten(A) -> lists:reverse(flatten(A,[])).
+flatten([A|B],ACCUM) -> flatten(B,flatten(A,ACCUM));
+flatten([],ACCUM) -> ACCUM;
+flatten(A,ACCUM) -> [A|ACCUM].
+
+is_string([]) -> true;
+is_string([H|T]) when is_integer(H) -> is_string(T);
+is_string(_) -> false.
+
+split_on(FUN,LIST) -> split_on(FUN,LIST,[],[]).
+split_on(_FUN,[],[],ACCUM) -> lists:reverse(ACCUM);
+split_on(FUN,[],X,ACCUM) -> split_on(FUN,[],[],[X|ACCUM]);
+split_on(FUN,[H|T],X,ACCUM) ->
+  case FUN(H) of
+    true -> split_on(FUN,T,[],[lists:reverse(X)|ACCUM]);
+    false -> split_on(FUN,T,[H|X],ACCUM)
+  end.
 

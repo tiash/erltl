@@ -123,7 +123,7 @@ do_compile(Source, Target, Config) ->
     ErlTLOpts = erltl_opts(Config),
     ErlcOpts = erlc_opts(Config),
     OutDir = option(out_dir, ErlTLOpts++ErlcOpts),
-    Module = list_to_atom(re:replace(string:substr(filename:rootname(Target),length(OutDir)+2),"/",".",[global])),
+    Module = binary_to_atom(iolist_to_binary(re:replace(string:substr(filename:rootname(Target),length(OutDir)+2),"/",".",[global])),utf8),
     %% ensure that doc_root and out_dir are defined,
     %% using defaults if necessary
     Opts = [{outdir, OutDir}, report,return],

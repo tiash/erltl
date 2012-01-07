@@ -107,7 +107,7 @@ option(Opt, ErlTLOpts) ->
 default(doc_root) -> "pages";
 default(out_dir)  -> "ebin";
 default(source_ext) -> ".erltl";
-default(out_ext) -> "/erltl.beam".
+default(out_ext) -> "_erltl.beam".
 
 compile_tl(Source, Target, Config) ->
             case needs_compile(Source, Target, Config) of
